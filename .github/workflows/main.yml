@@ -1,10 +1,10 @@
-name: RDP Setup and Software Installation
+name: RDP Setup and VirtualBox Installer + OVA Download
 
 on:
   workflow_dispatch:
 
 jobs:
-  setup-rdp:
+  setup-rdp-and-vm:
     runs-on: windows-latest
     timeout-minutes: 3600
 
@@ -15,17 +15,13 @@ jobs:
 
       - name: Configure Core RDP Settings
         run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                             -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "SecurityLayer" -Value 0 -Force
-          netsh advfirewall firewall add rule name="RDP-Tailscale" `
-            dir=in action=allow protocol=TCP localport=3389
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP User with Fixed Password
+      - name: Create RDP User
         run: |
           $password = 'Zain.rty123'
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
@@ -34,17 +30,9 @@ jobs:
           } else {
               New-LocalUser -Name "Administrator" -Password $securePass -AccountNeverExpires
           }
-          if (-not (Get-LocalGroupMember -Group "Administrators" -Member "Administrator" -ErrorAction SilentlyContinue)) {
-              Add-LocalGroupMember -Group "Administrators" -Member "Administrator"
-          }
-          if (-not (Get-LocalGroupMember -Group "Remote Desktop Users" -Member "Administrator" -ErrorAction SilentlyContinue)) {
-              Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Administrator"
-          }
-          echo "RDP_CREDS=User: Administrator | Password: $password" >> $env:GITHUB_ENV
-          if (-not (Get-LocalUser -Name "Administrator")) {
-              Write-Error "User creation or update failed"
-              exit 1
-          }
+          Add-LocalGroupMember -Group "Administrators" -Member "Administrator" -ErrorAction SilentlyContinue
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Administrator" -ErrorAction SilentlyContinue
+          echo "RDP_CREDS=$password" >> $env:GITHUB_ENV
 
       - name: Keep Administrator Session Active
         run: |
@@ -60,7 +48,7 @@ jobs:
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
           $installerPath = "$env:TEMP\tailscale.msi"
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart" -Wait
           Remove-Item $installerPath -Force
 
       - name: Establish Tailscale Connection
@@ -92,25 +80,30 @@ jobs:
 
       - name: Download VirtualBox and OVA Files Using gdown
         run: |
-          # Ensure Python and gdown are installed
+          # Install Python packages
           python -m pip install --upgrade pip
           pip install gdown --no-cache-dir
 
-          $dest = "C:\Users\Administrator\Downloads"
+          $dest = "C:\Users\Administrator\Desktop\Public"
           if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
 
           $files = @(
-            @{ Id = "1QWi-H7_IZgrohf4xCRvmOTvFF2SqAUtw"; Name = "Nadeem.ova" },
+            @{ Id = "1vrV8DxnanOaDDMYyJCl924YS2hWDp02R"; Name = "Nadeem.ova" },
             @{ Id = "1TWl--uMIzyEfyvh44hfLYx0n4D3B82XF"; Name = "VirtualBox-7.2.4-170995-Win.exe" }
           )
 
           foreach ($file in $files) {
-              $url = "https://drive.google.com/uc?id=$($file.Id)"
+              $url = "https://drive.google.com/uc?export=download&id=$($file.Id)"
               $output = Join-Path $dest $file.Name
               Write-Host "Downloading $($file.Name) to $output ..."
-              python -m gdown $url -O $output --fuzzy
+              python -m gdown $url -O $output
               Write-Host "Downloaded $($file.Name)`n"
           }
+
+      - name: Install VirtualBox Silently
+        run: |
+          $vbInstaller = "C:\Users\Administrator\Desktop\Public\VirtualBox-7.2.4-170995-Win.exe"
+          Start-Process -FilePath $vbInstaller -ArgumentList "--silent --msiparams ALLUSERS=2" -Wait
 
       - name: Maintain RDP Connection
         run: |
