@@ -9,7 +9,6 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v2
 
@@ -78,27 +77,22 @@ jobs:
           }
           Write-Host "TCP connectivity successful!"
 
-      - name: Download VirtualBox and OVA Files Using gdown
+      - name: Download VirtualBox and OVA Directly (No Keys)
         run: |
-          # Install Python packages
-          python -m pip install --upgrade pip
-          pip install gdown --no-cache-dir
-
           $dest = "C:\Users\Administrator\Desktop\Public"
           if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
 
-          $files = @(
-            @{ Id = "1vrV8DxnanOaDDMYyJCl924YS2hWDp02R"; Name = "Nadeem.ova" },
-            @{ Id = "1TWl--uMIzyEfyvh44hfLYx0n4D3B82XF"; Name = "VirtualBox-7.2.4-170995-Win.exe" }
-          )
+          Write-Host "Downloading OVA..."
+          Invoke-WebRequest `
+            -Uri "https://pub-4e3db5ccea8a4f30ae7d4ee15e71f566.r2.dev/Nadeem.ova" `
+            -OutFile "$dest\Nadeem.ova" `
+            -UseBasicParsing
 
-          foreach ($file in $files) {
-              $url = "https://drive.google.com/uc?export=download&id=$($file.Id)"
-              $output = Join-Path $dest $file.Name
-              Write-Host "Downloading $($file.Name) to $output ..."
-              python -m gdown $url -O $output
-              Write-Host "Downloaded $($file.Name)`n"
-          }
+          Write-Host "Downloading VirtualBox installer..."
+          Invoke-WebRequest `
+            -Uri "https://download.virtualbox.org/virtualbox/7.2.4/VirtualBox-7.2.4-170995-Win.exe" `
+            -OutFile "$dest\VirtualBox-7.2.4-170995-Win.exe" `
+            -UseBasicParsing
 
       - name: Install VirtualBox Silently
         run: |
